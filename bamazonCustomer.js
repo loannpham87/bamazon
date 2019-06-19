@@ -1,5 +1,7 @@
 var mysql = require("mysql");
 var inquirer = require("inquirer");
+var consoleTable = require("console.table");
+var chalk = require("chalk");
 
 var connection = mysql.createConnection({
     host: "localhost",
@@ -11,67 +13,37 @@ var connection = mysql.createConnection({
 
 connection.connect(function (err) {
     if (err) throw (err);
-    queryAllProducts();
-    customerPurchase();
-    connection.end();
+    showTable();
 });
 
-function queryAllProducts() {
-    console.log(" Compiling all products for sale...\n");
+function showTable() {
     connection.query("SELECT * FROM products", function (err, res) {
+        console.log("----------------------------------------------------------------------------------------\n\n\n")
+        console.table(res);
         if (err) throw (err);
-        console.log(res);
-        connection.end();
+        customerPurchase();
     });
-};
+}
 
 function customerPurchase() {
     inquirer
-        .prompt([
+        .prompt({
             name: "purchase",
             type: "list",
             message: "What is the item ID of the product would you like to purchase?",
-            choices: ["1", "2", "3", "4", "5", "6,", "7", "8", "9", "10", "exit"]
-        ])
-        .then(function (answer) {
-            switch (answer.purchase) {
-                case "1":
-                    purchaseQuantity();
-                    break;
-                // get price of item
-                // store in var?
-                case "2":
-                    purchaseQuantity();
-                    break;
-                case "3":
-                    purchaseQuantity();
-                    break;
-                case "4":
-                    purchaseQuantity();
-                    break;
-                case "5":
-                    purchaseQuantity();
-                    break;
-                case "6":
-                    purchaseQuantity();
-                    break;
-                case "7":
-                    purchaseQuantity();
-                    break;
-                case "8":
-                    purchaseQuantity();
-                    break;
-                case "9":
-                    purchaseQuantity();
-                    break;
-                case "10":
-                    purchaseQuantity();
-                    break;
-            }
+            choices: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
         })
+        .then(function (answer) {
+
+            var choiceId = parseInt(answer.purchase);
+            var query = "SELECT * FROM products WHERE ?"
+            connection.query(query, { item_id: choiceId }, function (err, res) {
+                purchaseQuantity(choiceId, res[0].price, res[0].stock_quantity);
+            })
+        });
 }
 
-function purchaseQuantity() {
+function purchaseQuantity(itemId, price, stockQuantity) {
     inquirer
         .prompt([
             {
@@ -81,26 +53,23 @@ function purchaseQuantity() {
             }
         ])
         .then(function (answer) {
-            switch (answer.quantity) {
-                case "Quantity":
-                // if - answer.quantity is < stock_quantity {
-                    // UPDATE products
-                    // SET stock_quantity = stock_quantity - answer.quantity
-                    // var customerTotal = answer.quantity * PRICE
-                    // SELECT * FROM products
-                    // console.log("Your total is: " + customerTotal)
-                // };
-                    break;
+            var quantity = parseInt(answer.quantity);
 
-                case "insufficient quantity":
-
-                // else - {
-                    // If answer.quantity > stock_quantity    
-                        // prevent order from going through
-                        // console.log("We're sorry, we do not carry the quantity you requested.");
-                        // customerPurchase();
-                    break;
-            // }
+            if (quantity < stockQuantity) {
+                completePurchase(itemId, price, stockQuantity, quantity);
+            }
+            else {
+                console.log(chalk.red("The amount you requested is not in stock."));
             }
         })
+}
+
+function completePurchase(itemId, price, stockQuantity, quantity) {
+    console.log(chalk.green("Your total is: $" + (price * quantity)));
+    var updateStock = stockQuantity - quantity;
+    var query = "UPDATE products SET ? WHERE ?"
+    connection.query(query, [{ stock_quantity: updateStock }, { item_id: itemId }], function (err, res) {
+        if (err) throw (err);
+        connection.end();
+    });
 }
